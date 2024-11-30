@@ -1,5 +1,7 @@
 package types
 
+import "net/url"
+
 type SongAddPayload struct {
 	SongName string `json:"songName"`
 	Group    string `json:"songGroup"`
@@ -39,7 +41,7 @@ type Song struct {
 }
 
 type SongStore interface {
-	GetSongByName(name string) (*Song, error)
+	GetSongs(filters url.Values) ([]Song, error) // Updated signature
 	DeleteSong(name, group string) error
 	UpdateSongInfo(name, group string, lyrics interface{}, published string, link string) error
 	AddSong(name, group string, songDetails *SongDetail) error

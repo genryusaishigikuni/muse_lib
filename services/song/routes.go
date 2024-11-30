@@ -56,21 +56,22 @@ func (h *Handler) HandleAddSong(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) HandleGetSong(w http.ResponseWriter, r *http.Request) {
-	var payload types.SongGetPayload
-	err := ParseJson(r, &payload)
-	if err != nil {
-		WriteError(w, http.StatusBadRequest, err)
-		return
-	}
+	// Extract all query parameters
+	queryParams := r.URL.Query() // map[string][]string
 
-	// Retrieve the song from the database
-	song, err := h.store.GetSongByName(payload.SongName)
+	// Retrieve songs based on filters
+	songs, err := h.store.GetSongs(queryParams)
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, err)
 		return
 	}
 
-	WriteJSON(w, http.StatusOK, song)
+	if len(songs) == 0 {
+		WriteError(w, http.StatusNotFound, errors.New("no songs found matching the criteria"))
+		return
+	}
+
+	WriteJSON(w, http.StatusOK, songs)
 }
 
 func (h *Handler) HandleDeleteSong(w http.ResponseWriter, r *http.Request) {

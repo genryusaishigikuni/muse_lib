@@ -2,9 +2,12 @@ package song
 
 import (
 	"database/sql"
+	"fmt"
 	"github.com/genryusaishigikuni/muse_lib/types"
 	"github.com/lib/pq"
 	"log"
+	"net/url"
+	"strings"
 )
 
 type Store struct {
@@ -16,16 +19,51 @@ func NewStore(db *sql.DB) *Store {
 	return &Store{db: db}
 }
 
-// GetSongByName fetches a song by its name.
-func (s *Store) GetSongByName(name string) (*types.Song, error) {
-	var song types.Song
-	query := `SELECT id, songName, songGroup, songLyrics, published, link FROM songs WHERE songName = $1`
-	err := s.db.QueryRow(query, name).Scan(&song.ID, &song.SongName, &song.Group, pq.Array(&song.SongLyrics), &song.Published, &song.Link)
+func (s *Store) GetSongs(filters url.Values) ([]types.Song, error) {
+	baseQuery := `SELECT id, songName, songGroup, songLyrics, published, link FROM songs`
+	var whereClauses []string
+	var args []interface{}
+	argIndex := 1
+
+	for key, values := range filters {
+		// If multiple values for a parameter, use IN clause
+		if len(values) > 1 {
+			placeholders := make([]string, len(values))
+			for i, v := range values {
+				placeholders[i] = fmt.Sprintf("$%d", argIndex)
+				args = append(args, v)
+				argIndex++
+			}
+			whereClauses = append(whereClauses, fmt.Sprintf("%s IN (%s)", key, strings.Join(placeholders, ", ")))
+		} else if len(values) == 1 { // Single value
+			whereClauses = append(whereClauses, fmt.Sprintf("%s = $%d", key, argIndex))
+			args = append(args, values[0])
+			argIndex++
+		}
+	}
+
+	// Add WHERE clauses if filters exist
+	if len(whereClauses) > 0 {
+		baseQuery += " WHERE " + strings.Join(whereClauses, " AND ")
+	}
+
+	rows, err := s.db.Query(baseQuery, args...)
 	if err != nil {
-		log.Printf("Error retrieving song: %v", err)
 		return nil, err
 	}
-	return &song, nil
+	defer rows.Close()
+
+	var songs []types.Song
+	for rows.Next() {
+		var song types.Song
+		err := rows.Scan(&song.ID, &song.SongName, &song.Group, pq.Array(&song.SongLyrics), &song.Published, &song.Link)
+		if err != nil {
+			return nil, err
+		}
+		songs = append(songs, song)
+	}
+
+	return songs, nil
 }
 
 // DeleteSong removes a song from the database by name and group.
