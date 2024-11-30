@@ -21,7 +21,8 @@ func (s *Server) Start() error {
 	router := mux.NewRouter()
 	subRouter := router.PathPrefix("/api").Subrouter()
 
-	songHandler := song.NewHandler()
+	songStore := song.NewStore(s.db)
+	songHandler := song.NewHandler(songStore)
 	songHandler.RegisterRoutes(subRouter)
 
 	router.PathPrefix("/").Handler(http.FileServer(http.Dir("./static/")))

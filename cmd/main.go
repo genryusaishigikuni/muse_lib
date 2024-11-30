@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/genryusaishigikuni/muse_lib/cmd/server"
 	"github.com/genryusaishigikuni/muse_lib/config"
-	db "github.com/genryusaishigikuni/muse_lib/db"
+	"github.com/genryusaishigikuni/muse_lib/db"
 	"log"
 )
 
