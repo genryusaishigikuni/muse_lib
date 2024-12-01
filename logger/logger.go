@@ -96,7 +96,7 @@ func (r *responseWriterWrapper) Write(b []byte) (int, error) {
 
 func (r *responseWriterWrapper) Status() int {
 	if r.status == 0 {
-		return http.StatusOK
+		return http.StatusOK // Default to HTTP 200 if not set
 	}
 	return r.status
 }
