@@ -6,10 +6,16 @@ import (
 	"github.com/genryusaishigikuni/muse_lib/cmd/server"
 	"github.com/genryusaishigikuni/muse_lib/config"
 	"github.com/genryusaishigikuni/muse_lib/db"
-	"log"
+	"github.com/genryusaishigikuni/muse_lib/logger"
+	"log/slog"
 )
 
 func main() {
+	// Set up logger
+	logs := logger.SetupLogger("local")
+	logs.Info("starting muse_lib", slog.String("env", "local"))
+	logs.Debug("debug mode is on")
+
 	// Retrieve PostgresSQL configuration from environment variables or config
 	dbUser := config.Envs.DBUser
 	dbPassword := config.Envs.DBPassword
@@ -17,26 +23,29 @@ func main() {
 	dbName := config.Envs.DBName
 	sslMode := "disable"
 
-	// Initialize the PostgresSQL storage
+	// Initialize PostgresSQL storage
 	postgresDB, err := db.NewPostgresStorage(dbUser, dbPassword, dbAddress, dbName, sslMode)
 	if err != nil {
-		log.Fatal("Failed to connect to PostgresSQL:", err)
+		logs.Error("Failed to initialize a new connection to PostgresSQL", logger.Err(err))
+		return
 	}
 
-	initStorage(postgresDB)
+	// Verify database connection
+	initStorage(postgresDB, logs)
 
+	// Start server
 	newServer := server.NewServer(fmt.Sprintf(":%s", config.Envs.Port), postgresDB)
 	err = newServer.Start()
 	if err != nil {
-		log.Fatal("Failed to start server:", err)
+		logs.Error("Failed to start server", logger.Err(err))
 	}
 }
 
-func initStorage(db *sql.DB) {
+func initStorage(db *sql.DB, logs *slog.Logger) {
 	err := db.Ping()
 	if err != nil {
-		log.Fatal(err)
+		logs.Error("Failed to verify connection to PostgresSQL", logger.Err(err))
+		return
 	}
-
-	log.Println("DB: Successfully connected!")
+	logs.Info("Successfully connected to PostgresSQL")
 }

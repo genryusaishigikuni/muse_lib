@@ -9,6 +9,7 @@ import (
 	"github.com/lib/pq"
 	"log"
 	"net/http"
+	"strings"
 )
 
 type Handler struct {
@@ -52,12 +53,14 @@ func (h *Handler) HandleAddSong(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	WriteJSON(w, http.StatusOK, map[string]string{"status": "song added"})
+	err = WriteJSON(w, http.StatusOK, map[string]string{"status": "song added"})
+	if err != nil {
+		log.Printf("Error while writing response: %v", err)
+	}
 }
 
 func (h *Handler) HandleGetSong(w http.ResponseWriter, r *http.Request) {
-	// Extract all query parameters
-	queryParams := r.URL.Query() // map[string][]string
+	queryParams := r.URL.Query()
 
 	// Retrieve songs based on filters
 	songs, err := h.store.GetSongs(queryParams)
@@ -71,7 +74,50 @@ func (h *Handler) HandleGetSong(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	WriteJSON(w, http.StatusOK, songs)
+	// Extract the 'fields' parameter
+	fields := queryParams.Get("fields")
+	if fields != "" {
+		selectedFields := strings.Split(fields, ",")
+		var response []map[string]interface{}
+
+		for _, song := range songs {
+			data := make(map[string]interface{})
+			for _, field := range selectedFields {
+				switch strings.TrimSpace(field) {
+				case "id":
+					data["id"] = song.ID
+				case "songName":
+					data["songName"] = song.SongName
+				case "songGroup":
+					data["songGroup"] = song.Group
+				case "songLyrics":
+					data["songLyrics"] = song.SongLyrics
+				case "published":
+					data["published"] = song.Published
+				case "link":
+					data["link"] = song.Link
+				// Handle additional fields here if necessary
+				default:
+					// Optionally log or handle invalid fields
+					continue
+				}
+			}
+			response = append(response, data)
+		}
+
+		err := WriteJSON(w, http.StatusOK, response)
+		if err != nil {
+			log.Printf("Error while writing response: %v", err)
+		}
+		return
+	}
+
+	// Default full response if 'fields' is not specified
+	err = WriteJSON(w, http.StatusOK, songs)
+	if err != nil {
+		log.Printf("Error while writing response: %v", err)
+	}
+
 }
 
 func (h *Handler) HandleDeleteSong(w http.ResponseWriter, r *http.Request) {
@@ -89,7 +135,10 @@ func (h *Handler) HandleDeleteSong(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	WriteJSON(w, http.StatusOK, map[string]string{"status": "song deleted"})
+	err = WriteJSON(w, http.StatusOK, map[string]string{"status": "song deleted"})
+	if err != nil {
+		log.Printf("Error while writing response: %v", err)
+	}
 }
 
 func (h *Handler) HandleUpdateSong(w http.ResponseWriter, r *http.Request) {
@@ -107,7 +156,12 @@ func (h *Handler) HandleUpdateSong(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	WriteJSON(w, http.StatusOK, map[string]string{"status": "song updated"})
+	err = WriteJSON(w, http.StatusOK, map[string]string{"status": "song updated"})
+	if err != nil {
+		log.Printf("Error while writing response: %v", err)
+		return
+	}
+
 }
 
 func (h *Handler) fetchSongDetailsFromAPI(group, song string) (*types.SongDetail, error) {

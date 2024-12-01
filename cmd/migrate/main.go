@@ -1,28 +1,48 @@
 package main
 
 import (
+	"errors"
 	"github.com/genryusaishigikuni/muse_lib/config"
 	"github.com/genryusaishigikuni/muse_lib/db"
+	"github.com/genryusaishigikuni/muse_lib/logger" // Import your logger package
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/lib/pq" // PostgresSQL driver
-	"log"
 	"os"
 )
 
 func main() {
+	// Set up the logger based on the environment
+	log := logger.SetupLogger("local")
+
+	// Info: Starting migration process
+	log.Info("Starting migration process")
+
+	// Debug: Database connection parameters (ensure not to log sensitive info in production)
+	log.Debug("Connecting to database", "user", config.Envs.DBUser, "address", config.Envs.DBAddress, "database", config.Envs.DBName)
+
 	// Connect to the PostgresSQL database
-	db, err := db.NewPostgresStorage(config.Envs.DBUser, config.Envs.DBPassword, config.Envs.DBAddress, config.Envs.DBName, "disable")
+	database, err := db.NewPostgresStorage(config.Envs.DBUser, config.Envs.DBPassword, config.Envs.DBAddress, config.Envs.DBName, "disable")
 	if err != nil {
-		log.Fatal(err)
+		// Error: Failed to connect to the database
+		log.Error("Failed to connect to database", logger.Err(err))
+		return
 	}
 
+	// Debug: Successfully connected to database
+	log.Debug("Connected to database successfully")
+
 	// Create a migration driver for PostgresSQL
-	driver, err := postgres.WithInstance(db, &postgres.Config{})
+	driver, err := postgres.WithInstance(database, &postgres.Config{})
 	if err != nil {
-		log.Fatal(err)
+		// Error: Failed to create migration driver
+		log.Error("Failed to create migration driver", logger.Err(err))
+		return
 	}
+
+	// Info: Initializing migrations
+	log.Info("Initializing migrations")
 
 	// Initialize migrations
 	m, err := migrate.NewWithDatabaseInstance(
@@ -31,25 +51,36 @@ func main() {
 		driver,
 	)
 	if err != nil {
-		log.Fatal(err)
+		// Error: Failed to initialize migrations
+		log.Error("Failed to initialize migrations", logger.Err(err))
+		return
 	}
 
 	// Get current migration version
 	v, d, _ := m.Version()
-	log.Printf("Version: %d, dirty: %v", v, d)
+	// Info: Current migration version
+	log.Info("Current migration version", "version", v, "dirty", d)
 
 	// Command-line argument for migration direction (up or down)
 	cmd := os.Args[len(os.Args)-1]
 	if cmd == "up" {
-		// Apply migrations up
-		if err := m.Up(); err != nil && err != migrate.ErrNoChange {
-			log.Fatal(err)
+		// Info: Applying migrations up
+		log.Info("Applying migrations up")
+		if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+			// Error: Migration up failed
+			log.Error("Migration up failed", logger.Err(err))
+			return
 		}
-	}
-	if cmd == "down" {
-		// Apply migrations down
-		if err := m.Down(); err != nil && err != migrate.ErrNoChange {
-			log.Fatal(err)
+	} else if cmd == "down" {
+		// Info: Applying migrations down
+		log.Info("Applying migrations down")
+		if err := m.Down(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+			// Error: Migration down failed
+			log.Error("Migration down failed", logger.Err(err))
+			return
 		}
+	} else {
+		// Warn: Invalid command
+		log.Warn("Invalid command", "command", cmd)
 	}
 }
