@@ -137,13 +137,14 @@ func (s *Store) UpdateSongInfo(name, group string, lyrics interface{}, published
 	return nil
 }
 
-// AddSong adds a new song to the database with the provided details.
-func (s *Store) AddSong(name, group string, songDetails *types.SongDetail) error {
+func (s *Store) AddSong(name, group string, songDetails *types.SongDetail, songLyrics []string) error {
 	const op = "song.AddSong"
 	s.log.Info("Adding new song", "operation", op, "name", name, "group", group)
 
 	query := `INSERT INTO songs (songName, songGroup, songLyrics, published, link) VALUES ($1, $2, $3, $4, $5)`
-	_, err := s.db.Exec(query, name, group, songDetails.Text, songDetails.ReleaseDate, songDetails.Link)
+
+	// Use pq.Array to pass the slice of strings to the database as a text[] array
+	_, err := s.db.Exec(query, name, group, pq.Array(songLyrics), songDetails.ReleaseDate, songDetails.Link)
 	if err != nil {
 		s.log.Error("Error adding song", "operation", op, "name", name, "group", group, logger.Err(err))
 		return err

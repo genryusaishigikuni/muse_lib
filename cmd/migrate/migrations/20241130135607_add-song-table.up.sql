@@ -3,6 +3,6 @@ CREATE TABLE IF NOT EXISTS songs (
                        songName VARCHAR(255) NOT NULL,
                        songGroup VARCHAR(255) NOT NULL,
                        songLyrics TEXT[],
-                       published TIMESTAMP,
+                       published VARCHAR(255),
                        link VARCHAR(255)
 );
