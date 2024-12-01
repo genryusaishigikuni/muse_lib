@@ -6,10 +6,8 @@ import (
 	"github.com/genryusaishigikuni/muse_lib/logger"
 	"github.com/genryusaishigikuni/muse_lib/services/song"
 	"github.com/gorilla/mux"
-	"log"
 	"log/slog"
 	"net/http"
-	"os"
 )
 
 type Server struct {
@@ -17,24 +15,42 @@ type Server struct {
 	db   *sql.DB
 }
 
+// NewServer creates a new instance of the Server
 func NewServer(addr string, db *sql.DB) *Server {
 	return &Server{addr: addr, db: db}
 }
 
 func (s *Server) Start() error {
-	var env = config.Envs.Environment
-	logs := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	const op = "server.Start" // Operation context for logging
+
+	// Initialize logger
+	env := config.Envs.Environment
+	logs := logger.SetupLogger(env)
+	logs.Info("Starting HTTP server", slog.String("address", s.addr), slog.String("operation", op))
+
+	// Set up router with logging middleware
 	router := mux.NewRouter()
-	router.Use(logger.New(logs))
-	subRouter := router.PathPrefix("/api").Subrouter()
+	router.Use(logger.New(logs)) // Custom middleware for request logging
+	logs.Debug("Router and middleware initialized", slog.String("operation", op))
 
-	songStore := song.NewStore(s.db, "local")
+	// Initialize song service and routes
+	songStore := song.NewStore(s.db, env)
 	songHandler := song.NewHandler(songStore, env)
-	songHandler.RegisterRoutes(subRouter)
+	songHandler.RegisterRoutes(router.PathPrefix("/api").Subrouter())
+	logs.Debug("Song routes registered", slog.String("operation", op))
 
+	// Static file handler
 	router.PathPrefix("/").Handler(http.FileServer(http.Dir("./static/")))
-	log.Println("Listening on", s.addr)
+	logs.Info("Static file handler configured", slog.String("operation", op))
 
-	return http.ListenAndServe(s.addr, router)
+	// Start listening for requests
+	logs.Info("Listening for incoming connections", slog.String("address", s.addr), slog.String("operation", op))
+	err := http.ListenAndServe(s.addr, router)
+	if err != nil {
+		logs.Error("Server failed to start", logger.Err(err), slog.String("operation", op))
+		return err
+	}
 
+	logs.Info("Server stopped", slog.String("operation", op))
+	return nil
 }

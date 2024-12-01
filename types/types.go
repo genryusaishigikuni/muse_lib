@@ -20,11 +20,6 @@ type SongUpdatePayload struct {
 	Link       string   `json:"link"`
 }
 
-type SongGetPayload struct {
-	SongName string `json:"songName"`
-	Group    string `json:"songGroup"`
-}
-
 type SongDetail struct {
 	ReleaseDate string `json:"releaseDate"`
 	Text        string `json:"text"`

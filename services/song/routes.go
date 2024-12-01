@@ -1,3 +1,8 @@
+// Package song provides the handlers for managing songs.
+//
+// This package includes routes for adding, retrieving, updating, and deleting songs.
+// It interacts with an external API for song details and communicates with a database.
+
 package song
 
 import (
@@ -16,6 +21,9 @@ import (
 	"strings"
 )
 
+// Handler handles HTTP requests related to song management.
+//
+// It includes methods for adding, retrieving, updating, and deleting songs.
 type Handler struct {
 	store     types.SongStore
 	apiClient *resty.Client
@@ -30,6 +38,15 @@ func NewHandler(songStore types.SongStore, env string) *Handler {
 	}
 }
 
+// RegisterRoutes registers the song-related routes.
+//
+// @Summary Register song routes
+// @Description Adds routes for managing songs to the given router.
+// @Param router path string true "Router to which the routes will be added"
+// @Router /songs/add [post]
+// @Router /songs/get [get]
+// @Router /songs/update [put]
+// @Router /songs/delete [delete]
 func (h *Handler) RegisterRoutes(router *mux.Router) {
 	router.HandleFunc("/songs/add", h.HandleAddSong).Methods("POST")
 	router.HandleFunc("/songs/get", h.HandleGetSong).Methods("GET")
@@ -37,6 +54,18 @@ func (h *Handler) RegisterRoutes(router *mux.Router) {
 	router.HandleFunc("/songs/delete", h.HandleDeleteSong).Methods("DELETE")
 }
 
+// HandleAddSong adds a new song to the database.
+//
+// @Summary Add a new song
+// @Description Adds a new song with details retrieved from an external API.
+// @Tags songs
+// @Accept  json
+// @Produce json
+// @Param payload body types.SongAddPayload true "Song data to add"
+// @Success 201 {string} string "Song added successfully"
+// @Failure 400 {string} string "Invalid input"
+// @Failure 500 {string} string "Failed to add song"
+// @Router /songs/add [post]
 func (h *Handler) HandleAddSong(w http.ResponseWriter, r *http.Request) {
 	const op = "Handler.HandleAddSong"
 	h.logs.Info("Starting request", "operation", op, "method", r.Method)
@@ -70,6 +99,18 @@ func (h *Handler) HandleAddSong(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte("Song added successfully"))
 }
 
+// HandleGetSong retrieves songs based on query parameters.
+//
+// @Summary Retrieve songs
+// @Description Retrieves songs matching specified criteria.
+// @Tags songs
+// @Produce json
+// @Param group query string false "Group name"
+// @Param song query string false "Song name"
+// @Success 200 {array} types.Song "Songs retrieved successfully"
+// @Failure 404 {string} string "No songs found"
+// @Failure 500 {string} string "Failed to fetch songs"
+// @Router /songs/get [get]
 func (h *Handler) HandleGetSong(w http.ResponseWriter, r *http.Request) {
 	const op = "Handler.HandleGetSong"
 	h.logs.Info("Starting request", "operation", op, "method", r.Method, "query_params", r.URL.Query())
@@ -93,6 +134,18 @@ func (h *Handler) HandleGetSong(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// HandleDeleteSong deletes a song from the database.
+//
+// @Summary Delete a song
+// @Description Deletes a song based on its name and group.
+// @Tags songs
+// @Accept  json
+// @Produce json
+// @Param payload body types.SongDeletePayload true "Song data to delete"
+// @Success 200 {string} string "Song deleted successfully"
+// @Failure 400 {string} string "Invalid input"
+// @Failure 500 {string} string "Failed to delete song"
+// @Router /songs/delete [delete]
 func (h *Handler) HandleDeleteSong(w http.ResponseWriter, r *http.Request) {
 	const op = "Handler.HandleDeleteSong"
 	h.logs.Info("Starting request", "operation", op, "method", r.Method)
@@ -116,6 +169,18 @@ func (h *Handler) HandleDeleteSong(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// HandleUpdateSong updates song information.
+//
+// @Summary Update song
+// @Description Updates existing song details.
+// @Tags songs
+// @Accept  json
+// @Produce json
+// @Param payload body types.SongUpdatePayload true "Updated song data"
+// @Success 200 {string} string "Song updated successfully"
+// @Failure 400 {string} string "Invalid input"
+// @Failure 500 {string} string "Failed to update song"
+// @Router /songs/update [put]
 func (h *Handler) HandleUpdateSong(w http.ResponseWriter, r *http.Request) {
 	const op = "Handler.HandleUpdateSong"
 	h.logs.Info("Starting request", "operation", op, "method", r.Method)
@@ -165,39 +230,33 @@ func (h *Handler) fetchSongDetailsFromAPI(group, song string) (*types.SongDetail
 	// Build the external API URL with query parameters
 	apiURL := fmt.Sprintf("http://localhost:8081/info?group=%s&song=%s", url.QueryEscape(group), url.QueryEscape(song))
 
-	// Make the GET request to the external API
+	h.logs.Debug("Making API request", "operation", op, "url", apiURL)
+
+	// Make the request using the Resty client
 	resp, err := h.apiClient.R().Get(apiURL)
 	if err != nil {
-		log.Printf("Error calling external API: %v", err)
-		return nil, errors.New("failed to fetch song details from external API")
+		h.logs.Error("Error fetching from API", "operation", op, logger.Err(err))
+		return nil, err
 	}
 
-	// Check if the response status is not 200 OK
+	h.logs.Debug("API response received", "operation", op, "status_code", resp.StatusCode())
 	if resp.StatusCode() != http.StatusOK {
-		log.Printf("External API returned non-200 status: %d", resp.StatusCode())
-		return nil, fmt.Errorf("external API error: status %d", resp.StatusCode())
+		return nil, fmt.Errorf("API request failed with status code %d", resp.StatusCode())
 	}
 
-	// Parse the response body into SongDetail
 	var songDetails types.SongDetail
 	if err := json.Unmarshal(resp.Body(), &songDetails); err != nil {
-		h.logs.Error("Error parsing external API response", "operation", op, logger.Err(err))
-		return nil, errors.New("failed to parse external API response")
+		h.logs.Error("Error unmarshalling API response", "operation", op, logger.Err(err))
+		return nil, err
 	}
 
 	return &songDetails, nil
 }
 
 func splitLyrics(text string) []string {
-	// Split the lyrics into lines by newline character
-	lines := strings.Split(text, "\n")
-	// Remove empty lines (if any)
-	var cleanedLines []string
-	for _, line := range lines {
-		trimmedLine := strings.TrimSpace(line)
-		if trimmedLine != "" {
-			cleanedLines = append(cleanedLines, trimmedLine)
-		}
+	if text == "" {
+		return nil
 	}
-	return cleanedLines
+	// Split text into verses
+	return strings.Split(text, "\n\n")
 }
