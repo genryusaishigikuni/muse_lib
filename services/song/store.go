@@ -2,6 +2,7 @@ package song
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"github.com/genryusaishigikuni/muse_lib/logger" // Import the logger package
 	"github.com/genryusaishigikuni/muse_lib/types"
@@ -111,10 +112,22 @@ func (s *Store) DeleteSong(name, group string) error {
 	s.log.Info("Deleting song", "operation", op, "name", name, "group", group)
 
 	query := `DELETE FROM songs WHERE songName = $1 AND songGroup = $2`
-	_, err := s.db.Exec(query, name, group)
+	result, err := s.db.Exec(query, name, group) // Get the Result object
 	if err != nil {
 		s.log.Error("Error deleting song", "operation", op, "name", name, "group", group, logger.Err(err))
 		return err
+	}
+
+	// Check the number of rows affected
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		s.log.Error("Error retrieving rows affected", "operation", op, logger.Err(err))
+		return err
+	}
+
+	if rowsAffected == 0 {
+		s.log.Warn("No song found to delete", "operation", op, "name", name, "group", group)
+		return errors.New("song not found")
 	}
 
 	s.log.Info("Song deleted successfully", "operation", op, "name", name, "group", group)
@@ -127,13 +140,25 @@ func (s *Store) UpdateSongInfo(name, group string, lyrics interface{}, published
 	s.log.Info("Updating song info", "operation", op, "name", name, "group", group)
 
 	query := `UPDATE songs SET songLyrics = $1, published = $2, link = $3 WHERE songName = $4 AND songGroup = $5`
-	_, err := s.db.Exec(query, lyrics, published, link, name, group)
+	result, err := s.db.Exec(query, lyrics, published, link, name, group)
 	if err != nil {
 		s.log.Error("Error updating song", "operation", op, "name", name, "group", group, logger.Err(err))
 		return err
 	}
 
-	s.log.Info("Song info updated", "operation", op, "name", name, "group", group)
+	// Check the number of rows affected
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		s.log.Error("Error retrieving rows affected", "operation", op, logger.Err(err))
+		return err
+	}
+
+	if rowsAffected == 0 {
+		s.log.Warn("No changes made to the song info or song not found", "operation", op, "name", name, "group", group)
+		return fmt.Errorf("no changes made or song not found")
+	}
+
+	s.log.Info("Song info updated successfully", "operation", op, "name", name, "group", group)
 	return nil
 }
 

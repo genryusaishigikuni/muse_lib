@@ -1,11 +1,11 @@
 build:
-	@go build -o bin/ecom cmd/main.go
+	@go build -o bin/muse_lib cmd/main.go
 
 test:
 	@go test -v ./...
 
 run: build
-	@./bin/ecom
+	@./bin/muse_lib
 
 migration:
 	@migrate create -ext sql -dir cmd/migrate/migrations $(filter-out $@,$(MAKECMDGOALS))

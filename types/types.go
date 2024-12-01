@@ -8,21 +8,21 @@ type SongAddPayload struct {
 }
 
 type SongDeletePayload struct {
-	SongName string `json:"songName"`
-	Group    string `json:"songGroup"`
+	SongName string `json:"song"`
+	Group    string `json:"group"`
 }
 
 type SongUpdatePayload struct {
-	SongName   string   `json:"songName"`
-	Group      string   `json:"songGroup"`
-	SongLyrics []string `json:"songLyrics"`
-	Published  string   `json:"published"`
+	SongName   string   `json:"song"`
+	Group      string   `json:"group"`
+	SongLyrics []string `json:"text"`
+	Published  string   `json:"releaseDate"`
 	Link       string   `json:"link"`
 }
 
 type SongGetPayload struct {
-	SongName string `json:"songName"`
-	Group    string `json:"songGroup"`
+	SongName string `json:"song"`
+	Group    string `json:"group"`
 }
 
 type SongDetail struct {
@@ -33,10 +33,10 @@ type SongDetail struct {
 
 type Song struct {
 	ID         int      `json:"id"`
-	SongName   string   `json:"songName"`
-	Group      string   `json:"songGroup"`
-	SongLyrics []string `json:"songLyrics"`
-	Published  string   `json:"published"`
+	SongName   string   `json:"song"`
+	Group      string   `json:"group"`
+	SongLyrics []string `json:"text"`
+	Published  string   `json:"releaseDate"`
 	Link       string   `json:"link"`
 }
 
