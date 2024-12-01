@@ -18,14 +18,14 @@ import (
 
 type Handler struct {
 	store     types.SongStore
-	apiClient *resty.Client // HTTP client to interact with external API
+	apiClient *resty.Client
 	logs      *slog.Logger
 }
 
 func NewHandler(songStore types.SongStore, env string) *Handler {
 	return &Handler{
 		store:     songStore,
-		apiClient: resty.New(), // Initialize the Resty HTTP client
+		apiClient: resty.New(),
 		logs:      logger.SetupLogger(env),
 	}
 }
@@ -39,146 +39,124 @@ func (h *Handler) RegisterRoutes(router *mux.Router) {
 
 func (h *Handler) HandleAddSong(w http.ResponseWriter, r *http.Request) {
 	const op = "Handler.HandleAddSong"
+	h.logs.Info("Starting request", "operation", op, "method", r.Method)
 
-	// Parse the incoming JSON payload
 	var payload types.SongAddPayload
-	err := json.NewDecoder(r.Body).Decode(&payload)
-	if err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		h.logs.Error("Invalid input", "operation", op, logger.Err(err))
 		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
 	}
+	h.logs.Debug("Payload decoded", "operation", op, "payload", payload)
 
-	// Fetch enriched song details from the external API
 	songDetails, err := h.fetchSongDetailsFromAPI(payload.Group, payload.SongName)
 	if err != nil {
-		h.logs.Error("Error fetching song details from external API", "operation", op, logger.Err(err))
+		h.logs.Error("Error fetching song details", "operation", op, logger.Err(err))
+		http.Error(w, "Failed to fetch song details", http.StatusInternalServerError)
 		return
 	}
 
-	// Split the song lyrics into a slice
 	songLyrics := splitLyrics(songDetails.Text)
+	h.logs.Debug("Song lyrics processed", "operation", op, "lyrics_lines", len(songLyrics))
 
-	// Add the song to the database
-	err = h.store.AddSong(payload.SongName, payload.Group, songDetails, songLyrics)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Error adding song to the database: %v", err), http.StatusInternalServerError)
+	if err := h.store.AddSong(payload.SongName, payload.Group, songDetails, songLyrics); err != nil {
+		h.logs.Error("Error adding song to DB", "operation", op, logger.Err(err))
+		http.Error(w, "Failed to add song to the database", http.StatusInternalServerError)
 		return
 	}
 
-	// Respond with success message
+	h.logs.Info("Song added successfully", "operation", op, "song_name", payload.SongName)
 	w.WriteHeader(http.StatusCreated)
-	_, err = w.Write([]byte("Song added successfully"))
-	if err != nil {
-		log.Printf("Error while writing response: %v", err)
-	}
-
+	_, _ = w.Write([]byte("Song added successfully"))
 }
 
 func (h *Handler) HandleGetSong(w http.ResponseWriter, r *http.Request) {
 	const op = "Handler.HandleGetSong"
-	queryParams := r.URL.Query()
+	h.logs.Info("Starting request", "operation", op, "method", r.Method, "query_params", r.URL.Query())
 
-	// Retrieve songs based on filters
-	songs, err := h.store.GetSongs(queryParams)
+	songs, err := h.store.GetSongs(r.URL.Query())
 	if err != nil {
+		h.logs.Error("Error fetching songs", "operation", op, logger.Err(err))
 		WriteError(w, http.StatusInternalServerError, err)
 		return
 	}
 
 	if len(songs) == 0 {
+		h.logs.Warn("No songs found", "operation", op)
 		WriteError(w, http.StatusNotFound, errors.New("no songs found matching the criteria"))
 		return
 	}
 
-	// Extract the 'fields' parameter
-	fields := queryParams.Get("fields")
-	if fields != "" {
-		selectedFields := strings.Split(fields, ",")
-		var response []map[string]interface{}
-
-		for _, song := range songs {
-			data := make(map[string]interface{})
-			for _, field := range selectedFields {
-				switch strings.TrimSpace(field) {
-				case "id":
-					data["id"] = song.ID
-				case "songName":
-					data["songName"] = song.SongName
-				case "songGroup":
-					data["songGroup"] = song.Group
-				case "songLyrics":
-					data["songLyrics"] = song.SongLyrics
-				case "published":
-					data["published"] = song.Published
-				case "link":
-					data["link"] = song.Link
-				// Handle additional fields here if necessary
-				default:
-					// Optionally log or handle invalid fields
-					continue
-				}
-			}
-			response = append(response, data)
-		}
-
-		err := WriteJSON(w, http.StatusOK, response)
-		if err != nil {
-			log.Printf("Error while writing response: %v", err)
-		}
-		return
+	h.logs.Debug("Songs retrieved", "operation", op, "count", len(songs))
+	if err := WriteJSON(w, http.StatusOK, songs); err != nil {
+		h.logs.Error("Error writing response", "operation", op, logger.Err(err))
 	}
-
-	// Default full response if 'fields' is not specified
-	err = WriteJSON(w, http.StatusOK, songs)
-	if err != nil {
-		h.logs.Error("Error while writing response", "operation", op, logger.Err(err))
-	}
-
 }
 
 func (h *Handler) HandleDeleteSong(w http.ResponseWriter, r *http.Request) {
 	const op = "Handler.HandleDeleteSong"
+	h.logs.Info("Starting request", "operation", op, "method", r.Method)
+
 	var payload types.SongDeletePayload
-	err := ParseJson(r, &payload)
-	if err != nil {
+	if err := ParseJson(r, &payload); err != nil {
+		h.logs.Error("Invalid input", "operation", op, logger.Err(err))
 		WriteError(w, http.StatusBadRequest, err)
 		return
 	}
 
-	// Delete the song from the database
-	err = h.store.DeleteSong(payload.SongName, payload.Group)
-	if err != nil {
+	if err := h.store.DeleteSong(payload.SongName, payload.Group); err != nil {
+		h.logs.Error("Error deleting song", "operation", op, logger.Err(err))
 		WriteError(w, http.StatusInternalServerError, err)
 		return
 	}
 
-	err = WriteJSON(w, http.StatusOK, map[string]string{"status": "song deleted"})
-	if err != nil {
-		h.logs.Error("Error while writing response", "operation", op, logger.Err(err))
+	h.logs.Info("Song deleted successfully", "operation", op, "song_name", payload.SongName)
+	if err := WriteJSON(w, http.StatusOK, map[string]string{"status": "song deleted"}); err != nil {
+		h.logs.Error("Error writing response", "operation", op, logger.Err(err))
 	}
 }
 
 func (h *Handler) HandleUpdateSong(w http.ResponseWriter, r *http.Request) {
+	const op = "Handler.HandleUpdateSong"
+	h.logs.Info("Starting request", "operation", op, "method", r.Method)
+
 	var payload types.SongUpdatePayload
-	err := ParseJson(r, &payload)
-	if err != nil {
+	if err := ParseJson(r, &payload); err != nil {
+		h.logs.Error("Invalid input", "operation", op, logger.Err(err))
 		WriteError(w, http.StatusBadRequest, err)
 		return
 	}
 
-	// Update the song information in the database with all parameters
-	err = h.store.UpdateSongInfo(payload.SongName, payload.Group, pq.Array(payload.SongLyrics), payload.Published, payload.Link)
-	if err != nil {
+	if err := h.store.UpdateSongInfo(payload.SongName, payload.Group, pq.Array(payload.SongLyrics), payload.Published, payload.Link); err != nil {
+		h.logs.Error("Error updating song", "operation", op, logger.Err(err))
 		WriteError(w, http.StatusInternalServerError, err)
 		return
 	}
 
-	err = WriteJSON(w, http.StatusOK, map[string]string{"status": "song updated"})
-	if err != nil {
-		log.Printf("Error while writing response: %v", err)
-		return
+	h.logs.Info("Song updated successfully", "operation", op, "song_name", payload.SongName)
+	if err := WriteJSON(w, http.StatusOK, map[string]string{"status": "song updated"}); err != nil {
+		h.logs.Error("Error writing response", "operation", op, logger.Err(err))
 	}
+}
 
+func ParseJson(r *http.Request, payload any) error {
+	if r.Body == nil {
+		return errors.New("missing request body")
+	}
+	return json.NewDecoder(r.Body).Decode(payload)
+}
+
+func WriteJSON(w http.ResponseWriter, status int, v any) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	return json.NewEncoder(w).Encode(v)
+}
+
+func WriteError(w http.ResponseWriter, status int, err error) {
+	err = WriteJSON(w, status, map[string]string{"error": err.Error()})
+	if err != nil {
+		log.Println(err)
+	}
 }
 
 func (h *Handler) fetchSongDetailsFromAPI(group, song string) (*types.SongDetail, error) {
@@ -208,26 +186,6 @@ func (h *Handler) fetchSongDetailsFromAPI(group, song string) (*types.SongDetail
 	}
 
 	return &songDetails, nil
-}
-
-func ParseJson(r *http.Request, payload any) error {
-	if r.Body == nil {
-		return errors.New("missing request body")
-	}
-	return json.NewDecoder(r.Body).Decode(payload)
-}
-
-func WriteJSON(w http.ResponseWriter, status int, v any) error {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	return json.NewEncoder(w).Encode(v)
-}
-
-func WriteError(w http.ResponseWriter, status int, err error) {
-	err = WriteJSON(w, status, map[string]string{"error": err.Error()})
-	if err != nil {
-		log.Println(err)
-	}
 }
 
 func splitLyrics(text string) []string {

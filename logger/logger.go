@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"github.com/genryusaishigikuni/muse_lib/logger/slogpretty"
 	"github.com/gorilla/mux"
 	"log/slog"
 	"net/http"
@@ -19,9 +20,7 @@ func SetupLogger(env string) *slog.Logger {
 
 	switch env {
 	case envLocal:
-		log = slog.New(
-			slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}),
-		)
+		log = slogpretty.SetupPrettySlog()
 	case envDev:
 		log = slog.New(
 			slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}),

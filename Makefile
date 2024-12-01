@@ -1,9 +1,6 @@
 build:
 	@go build -o bin/muse_lib cmd/main.go
 
-test:
-	@go test -v ./...
-
 run: build
 	@./bin/muse_lib
 
@@ -15,3 +12,10 @@ migrate-up:
 
 migrate-down:
 	@go run cmd/migrate/main.go down
+
+
+build_mock:
+	@go build -o bin/mock_api mockApi/main.go
+
+run_mock: build_mock
+	@./bin/mock_api
