@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/genryusaishigikuni/muse_lib/logger"
 	"github.com/genryusaishigikuni/muse_lib/types"
 	"github.com/go-resty/resty/v2"
 	"github.com/gorilla/mux"
 	"github.com/lib/pq"
 	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -17,12 +19,14 @@ import (
 type Handler struct {
 	store     types.SongStore
 	apiClient *resty.Client // HTTP client to interact with external API
+	logs      *slog.Logger
 }
 
-func NewHandler(songStore types.SongStore) *Handler {
+func NewHandler(songStore types.SongStore, env string) *Handler {
 	return &Handler{
 		store:     songStore,
 		apiClient: resty.New(), // Initialize the Resty HTTP client
+		logs:      logger.SetupLogger(env),
 	}
 }
 
@@ -47,7 +51,7 @@ func (h *Handler) HandleAddSong(w http.ResponseWriter, r *http.Request) {
 	// Fetch enriched song details from the external API
 	songDetails, err := h.fetchSongDetailsFromAPI(payload.Group, payload.SongName)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Error fetching song details: %v", err), http.StatusInternalServerError)
+		h.logs.Error("Error fetching song details from external API", "operation", op, logger.Err(err))
 		return
 	}
 
@@ -71,6 +75,7 @@ func (h *Handler) HandleAddSong(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) HandleGetSong(w http.ResponseWriter, r *http.Request) {
+	const op = "Handler.HandleGetSong"
 	queryParams := r.URL.Query()
 
 	// Retrieve songs based on filters
@@ -126,12 +131,13 @@ func (h *Handler) HandleGetSong(w http.ResponseWriter, r *http.Request) {
 	// Default full response if 'fields' is not specified
 	err = WriteJSON(w, http.StatusOK, songs)
 	if err != nil {
-		log.Printf("Error while writing response: %v", err)
+		h.logs.Error("Error while writing response", "operation", op, logger.Err(err))
 	}
 
 }
 
 func (h *Handler) HandleDeleteSong(w http.ResponseWriter, r *http.Request) {
+	const op = "Handler.HandleDeleteSong"
 	var payload types.SongDeletePayload
 	err := ParseJson(r, &payload)
 	if err != nil {
@@ -148,7 +154,7 @@ func (h *Handler) HandleDeleteSong(w http.ResponseWriter, r *http.Request) {
 
 	err = WriteJSON(w, http.StatusOK, map[string]string{"status": "song deleted"})
 	if err != nil {
-		log.Printf("Error while writing response: %v", err)
+		h.logs.Error("Error while writing response", "operation", op, logger.Err(err))
 	}
 }
 
@@ -197,7 +203,7 @@ func (h *Handler) fetchSongDetailsFromAPI(group, song string) (*types.SongDetail
 	// Parse the response body into SongDetail
 	var songDetails types.SongDetail
 	if err := json.Unmarshal(resp.Body(), &songDetails); err != nil {
-		log.Printf("Error parsing external API response: %v", err)
+		h.logs.Error("Error parsing external API response", "operation", op, logger.Err(err))
 		return nil, errors.New("failed to parse external API response")
 	}
 

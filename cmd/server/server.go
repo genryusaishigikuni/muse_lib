@@ -2,6 +2,7 @@ package server
 
 import (
 	"database/sql"
+	"github.com/genryusaishigikuni/muse_lib/config"
 	"github.com/genryusaishigikuni/muse_lib/logger"
 	"github.com/genryusaishigikuni/muse_lib/services/song"
 	"github.com/gorilla/mux"
@@ -21,13 +22,14 @@ func NewServer(addr string, db *sql.DB) *Server {
 }
 
 func (s *Server) Start() error {
+	var env = config.Envs.Environment
 	logs := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	router := mux.NewRouter()
 	router.Use(logger.New(logs))
 	subRouter := router.PathPrefix("/api").Subrouter()
 
 	songStore := song.NewStore(s.db, "local")
-	songHandler := song.NewHandler(songStore)
+	songHandler := song.NewHandler(songStore, env)
 	songHandler.RegisterRoutes(subRouter)
 
 	router.PathPrefix("/").Handler(http.FileServer(http.Dir("./static/")))

@@ -12,7 +12,8 @@ import (
 
 func main() {
 	// Set up logger
-	logs := logger.SetupLogger("local")
+	var env = config.Envs.Environment
+	logs := logger.SetupLogger(env)
 	logs.Info("starting muse_lib", slog.String("env", "local"))
 	logs.Debug("debug mode is on")
 

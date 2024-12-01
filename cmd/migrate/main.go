@@ -14,7 +14,8 @@ import (
 
 func main() {
 	// Set up the logger based on the environment
-	log := logger.SetupLogger("local")
+	var env = config.Envs.Environment
+	log := logger.SetupLogger(env)
 
 	// Info: Starting migration process
 	log.Info("Starting migration process")
