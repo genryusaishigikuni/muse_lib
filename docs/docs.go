@@ -121,13 +121,13 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Group name",
-                        "name": "group",
+                        "name": "songGroup",
                         "in": "query"
                     },
                     {
                         "type": "string",
                         "description": "Song name",
-                        "name": "song",
+                        "name": "songName",
                         "in": "query"
                     }
                 ],

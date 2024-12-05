@@ -5,6 +5,7 @@ import (
 	"github.com/genryusaishigikuni/muse_lib/config"
 	"github.com/genryusaishigikuni/muse_lib/logger"
 	"github.com/genryusaishigikuni/muse_lib/services/song"
+	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"log/slog"
 	"net/http"
@@ -30,6 +31,11 @@ func (s *Server) Start() error {
 
 	// Set up router with logging middleware
 	router := mux.NewRouter()
+	router.Use(handlers.CORS(
+		handlers.AllowedOrigins([]string{"*"}), // Adjust for production
+		handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE"}),
+		handlers.AllowedHeaders([]string{"Content-Type"}),
+	))
 	router.Use(logger.New(logs)) // Custom middleware for request logging
 	logs.Debug("Router and middleware initialized", slog.String("operation", op))
 

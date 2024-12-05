@@ -119,11 +119,11 @@ paths:
       parameters:
       - description: Group name
         in: query
-        name: group
+        name: songGroup
         type: string
       - description: Song name
         in: query
-        name: song
+        name: songName
         type: string
       produces:
       - application/json
