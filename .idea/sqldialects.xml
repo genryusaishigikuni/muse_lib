@@ -3,6 +3,8 @@
   <component name="SqlDialectMappings">
     <file url="file://$PROJECT_DIR$/cmd/migrate/migrations/20241203050548_song_table.down.sql" dialect="PostgreSQL" />
     <file url="file://$PROJECT_DIR$/cmd/migrate/migrations/20241203050548_song_table.up.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/cmd/migrate/migrations/20241206100102_groups_table.down.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/cmd/migrate/migrations/20241206100102_groups_table.up.sql" dialect="PostgreSQL" />
     <file url="file://$PROJECT_DIR$/services/song/store.go" dialect="PostgreSQL" />
   </component>
 </project>

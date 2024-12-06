@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/genryusaishigikuni/muse_lib/config"
 	"github.com/genryusaishigikuni/muse_lib/logger"
 	"github.com/genryusaishigikuni/muse_lib/types"
 	"github.com/go-resty/resty/v2"
@@ -228,7 +229,7 @@ func (h *Handler) fetchSongDetailsFromAPI(group, song string) (*types.SongDetail
 	const op = "Handler.fetchSongDetailsFromAPI"
 
 	// Build the external API URL with query parameters
-	apiURL := fmt.Sprintf("http://localhost:8081/info?group=%s&song=%s", url.QueryEscape(group), url.QueryEscape(song))
+	apiURL := fmt.Sprintf("%s/info?group=%s&song=%s", config.Envs.EXT_API, url.QueryEscape(group), url.QueryEscape(song))
 
 	h.logs.Debug("Making API request", "operation", op, "url", apiURL)
 

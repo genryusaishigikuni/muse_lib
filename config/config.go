@@ -16,6 +16,8 @@ type Config struct {
 	DBPassword string
 	DBAddress  string
 	DBName     string
+
+	EXT_API string
 }
 
 var Envs = initConfig()
@@ -35,6 +37,7 @@ func initConfig() Config {
 		DBPassword:  getEnv("DB_PASSWORD", "tamerlan123"),
 		DBAddress:   fmt.Sprintf("%s:%s", getEnv("DB_HOST", "127.0.0.1"), getEnv("DB_PORT", "5432")),
 		DBName:      getEnv("DB_NAME", "muse_lib"),
+		EXT_API:     getEnv("EXT_API", "http://localhost:8081/info"),
 	}
 }
 
