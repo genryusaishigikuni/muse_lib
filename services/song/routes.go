@@ -1,8 +1,3 @@
-// Package song provides the handlers for managing songs.
-//
-// This package includes routes for adding, retrieving, updating, and deleting songs.
-// It interacts with an external API for song details and communicates with a database.
-
 package song
 
 import (
@@ -14,7 +9,6 @@ import (
 	"github.com/genryusaishigikuni/muse_lib/types"
 	"github.com/go-resty/resty/v2"
 	"github.com/gorilla/mux"
-	"github.com/lib/pq"
 	"log"
 	"log/slog"
 	"net/http"
@@ -22,9 +16,6 @@ import (
 	"strings"
 )
 
-// Handler handles HTTP requests related to song management.
-//
-// It includes methods for adding, retrieving, updating, and deleting songs.
 type Handler struct {
 	store     types.SongStore
 	apiClient *resty.Client
@@ -39,15 +30,6 @@ func NewHandler(songStore types.SongStore, env string) *Handler {
 	}
 }
 
-// RegisterRoutes registers the song-related routes.
-//
-// @Summary Register song routes
-// @Description Adds routes for managing songs to the given router.
-// @Param router path string true "Router to which the routes will be added"
-// @Router /songs/add [post]
-// @Router /songs/get [get]
-// @Router /songs/update [put]
-// @Router /songs/delete [delete]
 func (h *Handler) RegisterRoutes(router *mux.Router) {
 	router.HandleFunc("/songs/add", h.HandleAddSong).Methods("POST")
 	router.HandleFunc("/songs/get", h.HandleGetSong).Methods("GET")
@@ -55,18 +37,6 @@ func (h *Handler) RegisterRoutes(router *mux.Router) {
 	router.HandleFunc("/songs/delete", h.HandleDeleteSong).Methods("DELETE")
 }
 
-// HandleAddSong adds a new song to the database.
-//
-// @Summary Add a new song
-// @Description Adds a new song with details retrieved from an external API.
-// @Tags songs
-// @Accept  json
-// @Produce json
-// @Param payload body types.SongAddPayload true "Song data to add"
-// @Success 201 {string} string "Song added successfully"
-// @Failure 400 {string} string "Invalid input"
-// @Failure 500 {string} string "Failed to add song"
-// @Router /songs/add [post]
 func (h *Handler) HandleAddSong(w http.ResponseWriter, r *http.Request) {
 	const op = "Handler.HandleAddSong"
 	h.logs.Info("Starting request", "operation", op, "method", r.Method)
@@ -79,7 +49,8 @@ func (h *Handler) HandleAddSong(w http.ResponseWriter, r *http.Request) {
 	}
 	h.logs.Debug("Payload decoded", "operation", op, "payload", payload)
 
-	songDetails, err := h.fetchSongDetailsFromAPI(payload.Group, payload.SongName)
+	externalAPI := config.Envs.ExtApi
+	songDetails, err := h.fetchSongDetailsFromAPI(payload.Group, payload.SongName, externalAPI)
 	if err != nil {
 		h.logs.Error("Error fetching song details", "operation", op, logger.Err(err))
 		http.Error(w, "Failed to fetch song details", http.StatusInternalServerError)
@@ -100,31 +71,46 @@ func (h *Handler) HandleAddSong(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte("Song added successfully"))
 }
 
-// HandleGetSong retrieves songs based on query parameters.
-//
-// @Summary Retrieve songs
-// @Description Retrieves songs matching specified criteria.
-// @Tags songs
-// @Produce json
-// @Param group query string false "Group name"
-// @Param song query string false "Song name"
-// @Success 200 {array} types.Song "Songs retrieved successfully"
-// @Failure 404 {string} string "No songs found"
-// @Failure 500 {string} string "Failed to fetch songs"
-// @Router /songs/get [get]
 func (h *Handler) HandleGetSong(w http.ResponseWriter, r *http.Request) {
 	const op = "Handler.HandleGetSong"
 	h.logs.Info("Starting request", "operation", op, "method", r.Method, "query_params", r.URL.Query())
 
-	songs, err := h.store.GetSongs(r.URL.Query())
+	// Initialize filters from query parameters
+	filters := r.URL.Query()
+
+	// Check if no filters were provided in the query
+	if len(filters) == 0 && r.Body != nil {
+		h.logs.Debug("No query parameters provided, checking request body", "operation", op)
+		var bodyFilters map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&bodyFilters); err != nil {
+			h.logs.Error("Error decoding JSON body", "operation", op, logger.Err(err))
+			WriteError(w, http.StatusBadRequest, errors.New("invalid JSON body"))
+			return
+		}
+
+		// Convert body filters to url.Values for compatibility
+		for key, value := range bodyFilters {
+			filters.Add(key, value)
+		}
+	}
+
+	if len(filters) == 0 {
+		h.logs.Warn("No filters provided in query or body", "operation", op)
+		WriteError(w, http.StatusBadRequest, errors.New("no filters provided"))
+		return
+	}
+
+	// Fetch songs based on filters
+	songs, err := h.store.GetSongs(filters)
 	if err != nil {
 		h.logs.Error("Error fetching songs", "operation", op, logger.Err(err))
 		WriteError(w, http.StatusInternalServerError, err)
 		return
 	}
 
+	// Handle the case where no songs match the filters
 	if len(songs) == 0 {
-		h.logs.Warn("No songs found", "operation", op)
+		h.logs.Warn("No songs found matching the criteria", "operation", op)
 		WriteError(w, http.StatusNotFound, errors.New("no songs found matching the criteria"))
 		return
 	}
@@ -135,18 +121,6 @@ func (h *Handler) HandleGetSong(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// HandleDeleteSong deletes a song from the database.
-//
-// @Summary Delete a song
-// @Description Deletes a song based on its name and group.
-// @Tags songs
-// @Accept  json
-// @Produce json
-// @Param payload body types.SongDeletePayload true "Song data to delete"
-// @Success 200 {string} string "Song deleted successfully"
-// @Failure 400 {string} string "Invalid input"
-// @Failure 500 {string} string "Failed to delete song"
-// @Router /songs/delete [delete]
 func (h *Handler) HandleDeleteSong(w http.ResponseWriter, r *http.Request) {
 	const op = "Handler.HandleDeleteSong"
 	h.logs.Info("Starting request", "operation", op, "method", r.Method)
@@ -158,7 +132,15 @@ func (h *Handler) HandleDeleteSong(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.store.DeleteSong(payload.SongName, payload.Group); err != nil {
+	// Validate input parameters: we need at least one of these parameters
+	if payload.SongName == "" && payload.Group == "" && payload.Link == "" && payload.ID == 0 {
+		h.logs.Error("No identifier provided", "operation", op)
+		WriteError(w, http.StatusBadRequest, errors.New("either song name, group, link, or ID must be provided"))
+		return
+	}
+
+	// Call the store to delete the song
+	if err := h.store.DeleteSong(payload.SongName, payload.Group, payload.Link, payload.ID); err != nil {
 		h.logs.Error("Error deleting song", "operation", op, logger.Err(err))
 		WriteError(w, http.StatusInternalServerError, err)
 		return
@@ -170,36 +152,37 @@ func (h *Handler) HandleDeleteSong(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// HandleUpdateSong updates song information.
-//
-// @Summary Update song
-// @Description Updates existing song details.
-// @Tags songs
-// @Accept  json
-// @Produce json
-// @Param payload body types.SongUpdatePayload true "Updated song data"
-// @Success 200 {string} string "Song updated successfully"
-// @Failure 400 {string} string "Invalid input"
-// @Failure 500 {string} string "Failed to update song"
-// @Router /songs/update [put]
 func (h *Handler) HandleUpdateSong(w http.ResponseWriter, r *http.Request) {
 	const op = "Handler.HandleUpdateSong"
 	h.logs.Info("Starting request", "operation", op, "method", r.Method)
 
-	var payload types.SongUpdatePayload
+	// Parse the incoming request payload
+	var payload types.Song
 	if err := ParseJson(r, &payload); err != nil {
 		h.logs.Error("Invalid input", "operation", op, logger.Err(err))
 		WriteError(w, http.StatusBadRequest, err)
 		return
 	}
 
-	if err := h.store.UpdateSongInfo(payload.SongName, payload.Group, pq.Array(payload.SongLyrics), payload.Published, payload.Link); err != nil {
+	// Ensure that the ID is not being updated and is positive
+	if payload.ID <= 0 {
+		h.logs.Error("Invalid ID", "operation", op, "error", "ID must be positive")
+		WriteError(w, http.StatusBadRequest, fmt.Errorf("ID must be positive"))
+		return
+	}
+
+	// Log the payload to see what is being sent
+	h.logs.Info("Received payload", "operation", op, "payload", payload)
+
+	// Update the song info based on the ID
+	if err := h.store.UpdateSongInfo(payload.ID, payload.SongName, payload.Group, payload.SongLyrics, payload.Published, payload.Link); err != nil {
 		h.logs.Error("Error updating song", "operation", op, logger.Err(err))
 		WriteError(w, http.StatusInternalServerError, err)
 		return
 	}
 
-	h.logs.Info("Song updated successfully", "operation", op, "song_name", payload.SongName)
+	// Respond with success message
+	h.logs.Info("Song updated successfully", "operation", op, "song_id", payload.ID)
 	if err := WriteJSON(w, http.StatusOK, map[string]string{"status": "song updated"}); err != nil {
 		h.logs.Error("Error writing response", "operation", op, logger.Err(err))
 	}
@@ -225,11 +208,11 @@ func WriteError(w http.ResponseWriter, status int, err error) {
 	}
 }
 
-func (h *Handler) fetchSongDetailsFromAPI(group, song string) (*types.SongDetail, error) {
+func (h *Handler) fetchSongDetailsFromAPI(group, song, externalAPI string) (*types.SongDetail, error) {
 	const op = "Handler.fetchSongDetailsFromAPI"
 
 	// Build the external API URL with query parameters
-	apiURL := fmt.Sprintf("%s/info?group=%s&song=%s", config.Envs.EXT_API, url.QueryEscape(group), url.QueryEscape(song))
+	apiURL := fmt.Sprintf("%s/info?group=%s&song=%s", externalAPI, url.QueryEscape(group), url.QueryEscape(song))
 
 	h.logs.Debug("Making API request", "operation", op, "url", apiURL)
 

@@ -1,6 +1,9 @@
 package types
 
-import "net/url"
+import (
+	"net/url"
+	"time"
+)
 
 type SongAddPayload struct {
 	SongName string `json:"song"`
@@ -8,16 +11,10 @@ type SongAddPayload struct {
 }
 
 type SongDeletePayload struct {
-	SongName string `json:"songName"`
-	Group    string `json:"songGroup"`
-}
-
-type SongUpdatePayload struct {
-	SongName   string   `json:"songName"`
-	Group      string   `json:"songGroup"`
-	SongLyrics []string `json:"songLyrics"`
-	Published  string   `json:"published"`
-	Link       string   `json:"link"`
+	SongName string `json:"song"`
+	Group    string `json:"group"`
+	Link     string `json:"link,omitempty"`
+	ID       int    `json:"id,omitempty"`
 }
 
 type SongDetail struct {
@@ -27,17 +24,17 @@ type SongDetail struct {
 }
 
 type Song struct {
-	ID         int      `json:"id"`
-	SongName   string   `json:"songName"`
-	Group      string   `json:"songGroup"`
-	SongLyrics []string `json:"songLyrics"`
-	Published  string   `json:"published"`
-	Link       string   `json:"link"`
+	ID         int       `json:"id"`
+	SongName   string    `json:"song"`
+	Group      string    `json:"group"`
+	SongLyrics []string  `json:"songLyrics"`
+	Published  time.Time `json:"published"`
+	Link       string    `json:"link"`
 }
 
 type SongStore interface {
 	GetSongs(filters url.Values) ([]Song, error) // Updated signature
-	DeleteSong(name, group string) error
-	UpdateSongInfo(name, group string, lyrics interface{}, published string, link string) error
+	DeleteSong(name, group, link string, id int) error
+	UpdateSongInfo(id int, name, group string, lyrics interface{}, published time.Time, link string) error
 	AddSong(name, group string, songDetails *SongDetail, text []string) error
 }

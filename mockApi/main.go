@@ -28,7 +28,7 @@ func infoHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Mock song details data
 	songDetails := SongDetail{
-		ReleaseDate: "16.07.2006",
+		ReleaseDate: "2006-07-16",
 		Text:        "Ooh baby, don't you know I suffer?\nOoh baby, can you hear me moan?\nYou caught me under false pretenses\nHow long before you let me go?\n\nOoh\nYou set my soul alight\nOoh\nYou set my soul alight",
 		Link:        "https://www.youtube.com/watch?v=Xsp3_a-PMTw",
 	}
