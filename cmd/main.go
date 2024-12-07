@@ -10,12 +10,6 @@ import (
 	"log/slog"
 )
 
-// @title Muse_Library App API
-// @version 1.0
-// @description API Server for Music Library App
-
-// @host localhost:8080
-// @BasePath /api/
 func main() {
 	const op = "main" // Operation context for consistent logging
 

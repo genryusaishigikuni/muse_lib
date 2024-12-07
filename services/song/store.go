@@ -54,7 +54,6 @@ func (s *Store) GetSongs(filters url.Values) ([]types.Song, error) {
 
 		switch columnName {
 		case "s.songName", "g.groupName", "s.link":
-			// String fields: Case-insensitive match
 			if len(values) > 1 {
 				placeholders := make([]string, len(values))
 				for i, v := range values {
@@ -70,7 +69,6 @@ func (s *Store) GetSongs(filters url.Values) ([]types.Song, error) {
 			}
 
 		case "s.published":
-			// Time field: Parse and handle date comparison
 			if len(values) == 1 {
 				publishedTime, err := time.Parse("2006-01-02", values[0])
 				if err != nil {
@@ -82,7 +80,6 @@ func (s *Store) GetSongs(filters url.Values) ([]types.Song, error) {
 			}
 
 		case "s.songLyrics":
-			// Array field: Match at least one of the lyrics
 			if len(values) > 0 {
 				placeholders := make([]string, len(values))
 				for i, v := range values {
@@ -94,7 +91,6 @@ func (s *Store) GetSongs(filters url.Values) ([]types.Song, error) {
 			}
 
 		case "s.id":
-			// Ensure numeric comparisons for IDs
 			if len(values) == 1 {
 				id, err := strconv.Atoi(values[0])
 				if err != nil {

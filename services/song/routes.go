@@ -77,7 +77,6 @@ func (h *Handler) HandleGetSong(w http.ResponseWriter, r *http.Request) {
 	const op = "Handler.HandleGetSong"
 	h.logs.Info("Starting request", "operation", op, "method", r.Method, "query_params", r.URL.Query())
 
-	// Define expected types for filters
 	expectedTypes := map[string]string{
 		"id":     "int",
 		"song":   "string",
@@ -87,10 +86,8 @@ func (h *Handler) HandleGetSong(w http.ResponseWriter, r *http.Request) {
 		"lyrics": "array",
 	}
 
-	// Initialize filters with query parameters
 	filters := r.URL.Query()
 
-	// If no query parameters, check the request body
 	if len(filters) == 0 && r.Body != nil {
 		h.logs.Debug("No query parameters provided, checking request body", "operation", op)
 
@@ -101,7 +98,6 @@ func (h *Handler) HandleGetSong(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Convert bodyFilters to query parameters format
 		for key, value := range bodyFilters {
 			switch v := value.(type) {
 			case string:
@@ -117,7 +113,6 @@ func (h *Handler) HandleGetSong(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Normalize and validate filters
 	normalizedFilters := url.Values{}
 	for key, values := range filters {
 		if len(values) == 0 {
@@ -151,7 +146,6 @@ func (h *Handler) HandleGetSong(w http.ResponseWriter, r *http.Request) {
 		normalizedFilters.Add(key, value)
 	}
 
-	// Fetch songs based on normalized filters
 	songs, err := h.store.GetSongs(normalizedFilters)
 	if err != nil {
 		h.logs.Error("Error fetching songs", "operation", op, logger.Err(err))
