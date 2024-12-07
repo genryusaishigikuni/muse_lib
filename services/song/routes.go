@@ -75,10 +75,8 @@ func (h *Handler) HandleGetSong(w http.ResponseWriter, r *http.Request) {
 	const op = "Handler.HandleGetSong"
 	h.logs.Info("Starting request", "operation", op, "method", r.Method, "query_params", r.URL.Query())
 
-	// Initialize filters from query parameters
 	filters := r.URL.Query()
 
-	// Check if no filters were provided in the query
 	if len(filters) == 0 && r.Body != nil {
 		h.logs.Debug("No query parameters provided, checking request body", "operation", op)
 		var bodyFilters map[string]string
@@ -88,7 +86,6 @@ func (h *Handler) HandleGetSong(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Convert body filters to url.Values for compatibility
 		for key, value := range bodyFilters {
 			filters.Add(key, value)
 		}
@@ -100,7 +97,6 @@ func (h *Handler) HandleGetSong(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fetch songs based on filters
 	songs, err := h.store.GetSongs(filters)
 	if err != nil {
 		h.logs.Error("Error fetching songs", "operation", op, logger.Err(err))
@@ -108,7 +104,6 @@ func (h *Handler) HandleGetSong(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Handle the case where no songs match the filters
 	if len(songs) == 0 {
 		h.logs.Warn("No songs found matching the criteria", "operation", op)
 		WriteError(w, http.StatusNotFound, errors.New("no songs found matching the criteria"))
@@ -132,14 +127,12 @@ func (h *Handler) HandleDeleteSong(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate input parameters: we need at least one of these parameters
 	if payload.SongName == "" && payload.Group == "" && payload.Link == "" && payload.ID == 0 {
 		h.logs.Error("No identifier provided", "operation", op)
 		WriteError(w, http.StatusBadRequest, errors.New("either song name, group, link, or ID must be provided"))
 		return
 	}
 
-	// Call the store to delete the song
 	if err := h.store.DeleteSong(payload.SongName, payload.Group, payload.Link, payload.ID); err != nil {
 		h.logs.Error("Error deleting song", "operation", op, logger.Err(err))
 		WriteError(w, http.StatusInternalServerError, err)
@@ -156,7 +149,6 @@ func (h *Handler) HandleUpdateSong(w http.ResponseWriter, r *http.Request) {
 	const op = "Handler.HandleUpdateSong"
 	h.logs.Info("Starting request", "operation", op, "method", r.Method)
 
-	// Parse the incoming request payload
 	var payload types.Song
 	if err := ParseJson(r, &payload); err != nil {
 		h.logs.Error("Invalid input", "operation", op, logger.Err(err))
@@ -164,24 +156,20 @@ func (h *Handler) HandleUpdateSong(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Ensure that the ID is not being updated and is positive
 	if payload.ID <= 0 {
 		h.logs.Error("Invalid ID", "operation", op, "error", "ID must be positive")
 		WriteError(w, http.StatusBadRequest, fmt.Errorf("ID must be positive"))
 		return
 	}
 
-	// Log the payload to see what is being sent
 	h.logs.Info("Received payload", "operation", op, "payload", payload)
 
-	// Update the song info based on the ID
 	if err := h.store.UpdateSongInfo(payload.ID, payload.SongName, payload.Group, payload.SongLyrics, payload.Published, payload.Link); err != nil {
 		h.logs.Error("Error updating song", "operation", op, logger.Err(err))
 		WriteError(w, http.StatusInternalServerError, err)
 		return
 	}
 
-	// Respond with success message
 	h.logs.Info("Song updated successfully", "operation", op, "song_id", payload.ID)
 	if err := WriteJSON(w, http.StatusOK, map[string]string{"status": "song updated"}); err != nil {
 		h.logs.Error("Error writing response", "operation", op, logger.Err(err))
@@ -211,12 +199,10 @@ func WriteError(w http.ResponseWriter, status int, err error) {
 func (h *Handler) fetchSongDetailsFromAPI(group, song, externalAPI string) (*types.SongDetail, error) {
 	const op = "Handler.fetchSongDetailsFromAPI"
 
-	// Build the external API URL with query parameters
 	apiURL := fmt.Sprintf("%s/info?group=%s&song=%s", externalAPI, url.QueryEscape(group), url.QueryEscape(song))
 
 	h.logs.Debug("Making API request", "operation", op, "url", apiURL)
 
-	// Make the request using the Resty client
 	resp, err := h.apiClient.R().Get(apiURL)
 	if err != nil {
 		h.logs.Error("Error fetching from API", "operation", op, logger.Err(err))
@@ -241,6 +227,5 @@ func splitLyrics(text string) []string {
 	if text == "" {
 		return nil
 	}
-	// Split text into verses
 	return strings.Split(text, "\n\n")
 }

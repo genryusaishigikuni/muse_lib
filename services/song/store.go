@@ -16,12 +16,11 @@ import (
 
 type Store struct {
 	db  *sql.DB
-	log *slog.Logger // Add a logger field to the Store
+	log *slog.Logger
 }
 
-// NewStore creates a new Store instance with the given database connection and logger.
 func NewStore(db *sql.DB, env string) *Store {
-	log := logger.SetupLogger(env) // Create a logger instance based on environment
+	log := logger.SetupLogger(env)
 	const op = "song.NewStore"
 	log.Debug("Initializing new store", "operation", op)
 	return &Store{db: db, log: log}
@@ -44,18 +43,16 @@ func (s *Store) GetSongs(filters url.Values) ([]types.Song, error) {
 		"published": "s.published",
 		"lyrics":    "s.songLyrics",
 		"link":      "s.link",
-		"id":        "s.id", // This is an integer, so no LOWER()
+		"id":        "s.id",
 	}
 
 	for key, values := range filters {
 		columnName, ok := filterMappings[key]
 		if !ok {
-			continue // Skip unsupported filters
+			continue
 		}
 
-		// If the column is a string, apply LOWER() for case-insensitive comparison
 		if columnName == "s.songName" || columnName == "g.groupName" || columnName == "s.link" || columnName == "s.songLyrics" {
-			// Support single and multiple values per filter
 			if len(values) > 1 {
 				placeholders := make([]string, len(values))
 				for i, v := range values {
@@ -70,7 +67,6 @@ func (s *Store) GetSongs(filters url.Values) ([]types.Song, error) {
 				argIndex++
 			}
 		} else {
-			// For non-string columns, just use the value directly (e.g., ID)
 			if len(values) > 1 {
 				placeholders := make([]string, len(values))
 				for i, v := range values {
@@ -87,12 +83,10 @@ func (s *Store) GetSongs(filters url.Values) ([]types.Song, error) {
 		}
 	}
 
-	// Build the WHERE clause
 	if len(whereClauses) > 0 {
 		baseQuery += " WHERE " + strings.Join(whereClauses, " AND ")
 	}
 
-	// Add LIMIT and OFFSET
 	limit := 10
 	offset := 0
 	if l, ok := filters["limit"]; ok && len(l) > 0 {
@@ -134,13 +128,11 @@ func (s *Store) GetSongs(filters url.Values) ([]types.Song, error) {
 	return songs, nil
 }
 
-// DeleteSong removes a song from the database by name and group.
 func (s *Store) DeleteSong(name, group, link string, id int) error {
 	const op = "song.DeleteSong"
 	s.log.Info("Deleting song", "operation", op, "name", name, "group", group, "link", link, "id", id)
 
 	var groupId int
-	// If group is provided, get the group ID
 	if group != "" {
 		queryGroup := `SELECT id FROM groups WHERE groupName = $1`
 		err := s.db.QueryRow(queryGroup, group).Scan(&groupId)
@@ -150,38 +142,30 @@ func (s *Store) DeleteSong(name, group, link string, id int) error {
 		}
 	}
 
-	// Construct the DELETE query based on provided parameters
 	var query string
 	var args []interface{}
 
-	// Determine which filters to apply for deletion
 	if id != 0 {
-		// Delete by ID
 		query = `DELETE FROM songs WHERE id = $1`
 		args = append(args, id)
 	} else {
-		// Otherwise, use name and group or link
 		query = `DELETE FROM songs WHERE songName = $1 AND songGroupId = $2`
 		args = append(args, name)
 
-		// Only use group ID if group is provided
 		if group != "" {
 			args = append(args, groupId)
 		} else {
-			// If no group, match by link (assuming link is unique)
 			query = `DELETE FROM songs WHERE link = $1`
 			args = append(args, link)
 		}
 	}
 
-	// Execute the delete query
 	result, err := s.db.Exec(query, args...)
 	if err != nil {
 		s.log.Error("Error deleting song", "operation", op, "name", name, "group", group, "link", link, logger.Err(err))
 		return err
 	}
 
-	// Check rows affected
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		s.log.Error("Error retrieving rows affected", "operation", op, logger.Err(err))
@@ -193,7 +177,6 @@ func (s *Store) DeleteSong(name, group, link string, id int) error {
 		return errors.New("song not found")
 	}
 
-	// Check if the group has no more songs associated with it
 	queryCount := `SELECT COUNT(*) FROM songs WHERE songGroupId = $1`
 	var count int
 	err = s.db.QueryRow(queryCount, groupId).Scan(&count)
@@ -202,7 +185,6 @@ func (s *Store) DeleteSong(name, group, link string, id int) error {
 		return err
 	}
 
-	// If no more songs in the group, delete the group
 	if count == 0 && groupId != 0 {
 		queryDeleteGroup := `DELETE FROM groups WHERE id = $1`
 		_, err = s.db.Exec(queryDeleteGroup, groupId)
@@ -217,12 +199,10 @@ func (s *Store) DeleteSong(name, group, link string, id int) error {
 	return nil
 }
 
-// UpdateSongInfo updates a song's details in the database.
 func (s *Store) UpdateSongInfo(id int, name, group string, lyrics interface{}, published time.Time, link string) error {
 	const op = "song.UpdateSongInfo"
 	s.log.Info("Updating song info", "operation", op, "id", id, "name", name, "group", group)
 
-	// Check if the song exists by ID
 	var songExists bool
 	query := `SELECT EXISTS(SELECT 1 FROM songs WHERE id = $1)`
 	err := s.db.QueryRow(query, id).Scan(&songExists)
@@ -236,16 +216,35 @@ func (s *Store) UpdateSongInfo(id int, name, group string, lyrics interface{}, p
 		return fmt.Errorf("song with ID %d not found", id)
 	}
 
-	// Fetch groupId for the given group name
-	var groupId int
-	query = `SELECT id FROM groups WHERE groupName = $1`
-	err = s.db.QueryRow(query, group).Scan(&groupId)
+	groupId := -1
+	var oldGroupId int
+
+	query = `SELECT songGroupId FROM songs WHERE id = $1`
+	err = s.db.QueryRow(query, id).Scan(&oldGroupId)
 	if err != nil {
-		s.log.Error("Error fetching groupId", "operation", op, "group", group, logger.Err(err))
-		return fmt.Errorf("group '%s' not found", group)
+		s.log.Error("Error fetching old groupId", "operation", op, "id", id, logger.Err(err))
+		return err
 	}
 
-	// Log current song info before update
+	if group != "" {
+		query = `SELECT id FROM groups WHERE groupName = $1`
+		err = s.db.QueryRow(query, group).Scan(&groupId)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			s.log.Error("Error fetching groupId", "operation", op, "group", group, logger.Err(err))
+			return fmt.Errorf("group '%s' not found", group)
+		}
+
+		if errors.Is(err, sql.ErrNoRows) {
+			query = `INSERT INTO groups (groupName) VALUES ($1) RETURNING id`
+			err = s.db.QueryRow(query, group).Scan(&groupId)
+			if err != nil {
+				s.log.Error("Error creating new group", "operation", op, "group", group, logger.Err(err))
+				return fmt.Errorf("could not create group '%s'", group)
+			}
+			s.log.Info("Created new group", "operation", op, "group", group, "groupId", groupId)
+		}
+	}
+
 	var currentSong types.Song
 	query = `SELECT s.id, s.songName, g.groupName, s.songLyrics, s.published, s.link
 			 FROM songs s
@@ -258,83 +257,87 @@ func (s *Store) UpdateSongInfo(id int, name, group string, lyrics interface{}, p
 		s.log.Info("Current song info before update", "operation", op, "song", currentSong)
 	}
 
-	// Build the query dynamically based on provided fields
 	query = `UPDATE songs SET `
 	var args []interface{}
 	argIndex := 1
 
-	// Handle lyrics if provided and cast to []string if it's an array
 	if l, ok := lyrics.([]string); ok && len(l) > 0 {
 		query += fmt.Sprintf("songLyrics = $%d, ", argIndex)
-		args = append(args, pq.Array(l)) // Use pq.Array to convert slice to a suitable format
+		args = append(args, pq.Array(l))
 		argIndex++
 	}
 
-	// Add songName to update if provided
 	if name != "" {
 		query += fmt.Sprintf("songName = $%d, ", argIndex)
 		args = append(args, name)
 		argIndex++
 	}
 
-	// Add groupId to update if provided (after fetching the correct groupId)
-	if groupId > 0 {
+	if groupId > -1 {
 		query += fmt.Sprintf("songGroupId = $%d, ", argIndex)
 		args = append(args, groupId)
 		argIndex++
 	}
 
-	// Add published date to update if provided
 	if !published.IsZero() {
 		query += fmt.Sprintf("published = $%d, ", argIndex)
 		args = append(args, published)
 		argIndex++
 	}
 
-	// Add link to update if provided
 	if link != "" {
 		query += fmt.Sprintf("link = $%d, ", argIndex)
 		args = append(args, link)
 		argIndex++
 	}
 
-	// If no fields are provided to update, return an error
 	if len(args) == 0 {
 		s.log.Warn("No fields to update", "operation", op)
 		return fmt.Errorf("no fields to update")
 	}
 
-	// Trim the trailing comma and space
 	query = query[:len(query)-2]
 
-	// Add the WHERE condition to update the song by ID
 	query += ` WHERE id = $` + fmt.Sprintf("%d", argIndex)
 	args = append(args, id)
 
-	// Log the full query for debugging
 	s.log.Info("Executing update query", "operation", op, "query", query, "args", args)
 
-	// Execute the update query
 	result, err := s.db.Exec(query, args...)
 	if err != nil {
 		s.log.Error("Error executing update query", "operation", op, "query", query, "args", args, logger.Err(err))
 		return err
 	}
 
-	// Check how many rows were affected
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		s.log.Error("Error retrieving rows affected", "operation", op, logger.Err(err))
 		return err
 	}
 
-	// Log the result to ensure that it actually updated
 	s.log.Info("Rows affected", "operation", op, "rows_affected", rowsAffected)
 
-	// If no rows were affected, it means the song was not found
 	if rowsAffected == 0 {
 		s.log.Warn("No changes made to the song info", "operation", op, "id", id)
 		return fmt.Errorf("no changes made to the song with ID %d", id)
+	}
+
+	if oldGroupId > -1 {
+		var count int
+		query = `SELECT COUNT(*) FROM songs WHERE songGroupId = $1`
+		err = s.db.QueryRow(query, oldGroupId).Scan(&count)
+		if err != nil {
+			s.log.Error("Error counting songs for old group", "operation", op, "oldGroupId", oldGroupId, logger.Err(err))
+		} else if count == 0 {
+			// No songs left in the old group, delete the group
+			query = `DELETE FROM groups WHERE id = $1`
+			_, err := s.db.Exec(query, oldGroupId)
+			if err != nil {
+				s.log.Error("Error deleting old group", "operation", op, "oldGroupId", oldGroupId, logger.Err(err))
+				return err
+			}
+			s.log.Info("Deleted old group", "operation", op, "oldGroupId", oldGroupId)
+		}
 	}
 
 	s.log.Info("Song info updated successfully", "operation", op, "id", id)
@@ -345,12 +348,10 @@ func (s *Store) AddSong(song, group string, songDetails *types.SongDetail, songL
 	const op = "song.AddSong"
 	s.log.Info("Adding new song", "operation", op, "name", song, "group", group)
 
-	// Check if the group exists, if not, create it
 	var groupID int
 	err := s.db.QueryRow(`SELECT id FROM groups WHERE groupName = $1`, group).Scan(&groupID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			// Group doesn't exist, insert it
 			err = s.db.QueryRow(`INSERT INTO groups (groupName) VALUES ($1) RETURNING id`, group).Scan(&groupID)
 			if err != nil {
 				s.log.Error("Error creating group", "operation", op, "group", group, logger.Err(err))
@@ -362,7 +363,6 @@ func (s *Store) AddSong(song, group string, songDetails *types.SongDetail, songL
 		}
 	}
 
-	// Insert the song with the obtained groupID
 	query := `INSERT INTO songs (songName, songGroupId, songLyrics, published, link) 
               VALUES ($1, $2, $3, $4, $5)`
 	_, err = s.db.Exec(query, song, groupID, pq.Array(songLyrics), songDetails.ReleaseDate, songDetails.Link)

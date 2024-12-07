@@ -75,7 +75,6 @@ func New(log *slog.Logger) mux.MiddlewareFunc {
 	}
 }
 
-// responseWriterWrapper is used to capture the response status and number of bytes written
 type responseWriterWrapper struct {
 	http.ResponseWriter
 	status       int

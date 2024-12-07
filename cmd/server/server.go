@@ -16,40 +16,34 @@ type Server struct {
 	db   *sql.DB
 }
 
-// NewServer creates a new instance of the Server
 func NewServer(addr string, db *sql.DB) *Server {
 	return &Server{addr: addr, db: db}
 }
 
 func (s *Server) Start() error {
-	const op = "server.Start" // Operation context for logging
+	const op = "server.Start"
 
-	// Initialize logger
 	env := config.Envs.Environment
 	logs := logger.SetupLogger(env)
 	logs.Info("Starting HTTP server", slog.String("address", s.addr), slog.String("operation", op))
 
-	// Set up router with logging middleware
 	router := mux.NewRouter()
 	router.Use(handlers.CORS(
-		handlers.AllowedOrigins([]string{"*"}), // Adjust for production
+		handlers.AllowedOrigins([]string{"*"}),
 		handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE"}),
 		handlers.AllowedHeaders([]string{"Content-Type"}),
 	))
-	router.Use(logger.New(logs)) // Custom middleware for request logging
+	router.Use(logger.New(logs))
 	logs.Debug("Router and middleware initialized", slog.String("operation", op))
 
-	// Initialize song service and routes
 	songStore := song.NewStore(s.db, env)
 	songHandler := song.NewHandler(songStore, env)
 	songHandler.RegisterRoutes(router.PathPrefix("/api").Subrouter())
 	logs.Debug("Song routes registered", slog.String("operation", op))
 
-	// Static file handler
 	router.PathPrefix("/").Handler(http.FileServer(http.Dir("./static/")))
 	logs.Info("Static file handler configured", slog.String("operation", op))
 
-	// Start listening for requests
 	logs.Info("Listening for incoming connections", slog.String("address", s.addr), slog.String("operation", op))
 	err := http.ListenAndServe(s.addr, router)
 	if err != nil {
