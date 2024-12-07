@@ -52,7 +52,9 @@ func (s *Store) GetSongs(filters url.Values) ([]types.Song, error) {
 			continue
 		}
 
-		if columnName == "s.songName" || columnName == "g.groupName" || columnName == "s.link" || columnName == "s.songLyrics" {
+		switch columnName {
+		case "s.songName", "g.groupName", "s.link":
+			// String fields: Case-insensitive match
 			if len(values) > 1 {
 				placeholders := make([]string, len(values))
 				for i, v := range values {
@@ -61,25 +63,60 @@ func (s *Store) GetSongs(filters url.Values) ([]types.Song, error) {
 					argIndex++
 				}
 				whereClauses = append(whereClauses, fmt.Sprintf("LOWER(%s) IN (%s)", columnName, strings.Join(placeholders, ", ")))
-			} else if len(values) == 1 {
+			} else {
 				whereClauses = append(whereClauses, fmt.Sprintf("LOWER(%s) = LOWER($%d)", columnName, argIndex))
 				args = append(args, values[0])
 				argIndex++
 			}
-		} else {
-			if len(values) > 1 {
+
+		case "s.published":
+			// Time field: Parse and handle date comparison
+			if len(values) == 1 {
+				publishedTime, err := time.Parse("2006-01-02", values[0])
+				if err != nil {
+					return nil, fmt.Errorf("invalid date format for 'published': %v", err)
+				}
+				whereClauses = append(whereClauses, fmt.Sprintf("%s = $%d", columnName, argIndex))
+				args = append(args, publishedTime)
+				argIndex++
+			}
+
+		case "s.songLyrics":
+			// Array field: Match at least one of the lyrics
+			if len(values) > 0 {
 				placeholders := make([]string, len(values))
 				for i, v := range values {
 					placeholders[i] = fmt.Sprintf("$%d", argIndex)
 					args = append(args, v)
 					argIndex++
 				}
-				whereClauses = append(whereClauses, fmt.Sprintf("%s IN (%s)", columnName, strings.Join(placeholders, ", ")))
-			} else if len(values) == 1 {
-				whereClauses = append(whereClauses, fmt.Sprintf("%s = $%d", columnName, argIndex))
-				args = append(args, values[0])
-				argIndex++
+				whereClauses = append(whereClauses, fmt.Sprintf("%s && ARRAY[%s]::text[]", columnName, strings.Join(placeholders, ", ")))
 			}
+
+		case "s.id":
+			// Ensure numeric comparisons for IDs
+			if len(values) == 1 {
+				id, err := strconv.Atoi(values[0])
+				if err != nil {
+					return nil, fmt.Errorf("invalid id format: %v", err)
+				}
+				whereClauses = append(whereClauses, fmt.Sprintf("%s = $%d", columnName, argIndex))
+				args = append(args, id)
+				argIndex++
+			} else if len(values) > 1 {
+				placeholders := make([]string, len(values))
+				for i, v := range values {
+					id, err := strconv.Atoi(v)
+					if err != nil {
+						return nil, fmt.Errorf("invalid id format: %v", err)
+					}
+					placeholders[i] = fmt.Sprintf("$%d", argIndex)
+					args = append(args, id)
+					argIndex++
+				}
+				whereClauses = append(whereClauses, fmt.Sprintf("%s IN (%s)", columnName, strings.Join(placeholders, ", ")))
+			}
+
 		}
 	}
 

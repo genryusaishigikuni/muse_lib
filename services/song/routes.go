@@ -13,7 +13,9 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
+	"time"
 )
 
 type Handler struct {
@@ -75,29 +77,82 @@ func (h *Handler) HandleGetSong(w http.ResponseWriter, r *http.Request) {
 	const op = "Handler.HandleGetSong"
 	h.logs.Info("Starting request", "operation", op, "method", r.Method, "query_params", r.URL.Query())
 
+	// Define expected types for filters
+	expectedTypes := map[string]string{
+		"id":     "int",
+		"song":   "string",
+		"group":  "string",
+		"link":   "string",
+		"time":   "time",
+		"lyrics": "array",
+	}
+
+	// Initialize filters with query parameters
 	filters := r.URL.Query()
 
+	// If no query parameters, check the request body
 	if len(filters) == 0 && r.Body != nil {
 		h.logs.Debug("No query parameters provided, checking request body", "operation", op)
-		var bodyFilters map[string]string
+
+		var bodyFilters map[string]interface{}
 		if err := json.NewDecoder(r.Body).Decode(&bodyFilters); err != nil {
 			h.logs.Error("Error decoding JSON body", "operation", op, logger.Err(err))
 			WriteError(w, http.StatusBadRequest, errors.New("invalid JSON body"))
 			return
 		}
 
+		// Convert bodyFilters to query parameters format
 		for key, value := range bodyFilters {
-			filters.Add(key, value)
+			switch v := value.(type) {
+			case string:
+				filters.Add(key, v)
+			case float64: // for numbers (e.g., id)
+				filters.Add(key, fmt.Sprintf("%d", int(v)))
+			case []interface{}: // for arrays (e.g., lyrics)
+				serialized, _ := json.Marshal(v)
+				filters.Add(key, string(serialized))
+			default:
+				h.logs.Warn("Unexpected type in JSON body", "key", key, "value", value, "type", fmt.Sprintf("%T", value))
+			}
 		}
 	}
 
-	if len(filters) == 0 {
-		h.logs.Warn("No filters provided in query or body", "operation", op)
-		WriteError(w, http.StatusBadRequest, errors.New("no filters provided"))
-		return
+	// Normalize and validate filters
+	normalizedFilters := url.Values{}
+	for key, values := range filters {
+		if len(values) == 0 {
+			continue
+		}
+
+		value := values[0]
+		if expectedType, exists := expectedTypes[key]; exists {
+			switch expectedType {
+			case "int":
+				if _, err := strconv.Atoi(value); err != nil {
+					h.logs.Error("Invalid integer value for filter", "key", key, "value", value, logger.Err(err))
+					WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid value for %s: must be an integer", key))
+					return
+				}
+			case "time":
+				if _, err := time.Parse(time.RFC3339, value); err != nil {
+					h.logs.Error("Invalid time value for filter", "key", key, "value", value, logger.Err(err))
+					WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid value for %s: must be a valid timestamp", key))
+					return
+				}
+			case "array":
+				var arr []string
+				if err := json.Unmarshal([]byte(value), &arr); err != nil {
+					h.logs.Error("Invalid array value for filter", "key", key, "value", value, logger.Err(err))
+					WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid value for %s: must be a valid array", key))
+					return
+				}
+			}
+		}
+		normalizedFilters.Add(key, value)
 	}
 
-	songs, err := h.store.GetSongs(filters)
+	// Fetch songs based on normalized filters
+	songs, err := h.store.GetSongs(normalizedFilters)
 	if err != nil {
 		h.logs.Error("Error fetching songs", "operation", op, logger.Err(err))
 		WriteError(w, http.StatusInternalServerError, err)
@@ -105,7 +160,7 @@ func (h *Handler) HandleGetSong(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(songs) == 0 {
-		h.logs.Warn("No songs found matching the criteria", "operation", op)
+		h.logs.Warn("No songs found matching the criteria", "operation", op, "filters", normalizedFilters)
 		WriteError(w, http.StatusNotFound, errors.New("no songs found matching the criteria"))
 		return
 	}
