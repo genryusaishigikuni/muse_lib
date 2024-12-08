@@ -11,10 +11,7 @@ type SongAddPayload struct {
 }
 
 type SongDeletePayload struct {
-	SongName string `json:"song"`
-	Group    string `json:"group"`
-	Link     string `json:"link,omitempty"`
-	ID       int    `json:"id,omitempty"`
+	ID int `json:"id,omitempty"`
 }
 
 type SongDetail struct {
@@ -34,7 +31,7 @@ type Song struct {
 
 type SongStore interface {
 	GetSongs(filters url.Values) ([]Song, error) // Updated signature
-	DeleteSong(name, group, link string, id int) error
+	DeleteSong(id int) error
 	UpdateSongInfo(id int, name, group string, lyrics interface{}, published time.Time, link string) error
 	AddSong(name, group string, songDetails *SongDetail, text []string) error
 }

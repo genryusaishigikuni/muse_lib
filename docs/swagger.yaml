@@ -1,0 +1,191 @@
+basePath: /api/
+definitions:
+  types.Song:
+    properties:
+      group:
+        type: string
+      id:
+        type: integer
+      link:
+        type: string
+      published:
+        type: string
+      song:
+        type: string
+      songLyrics:
+        items:
+          type: string
+        type: array
+    type: object
+  types.SongAddPayload:
+    properties:
+      group:
+        type: string
+      song:
+        type: string
+    type: object
+  types.SongDeletePayload:
+    properties:
+      id:
+        type: integer
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: API Server for Music Library App
+  title: Muse_Library App API
+  version: "1.0"
+paths:
+  /songs/add:
+    post:
+      consumes:
+      - application/json
+      description: Adds a new song with details retrieved from an external API.
+      parameters:
+      - description: Song data to add
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/types.SongAddPayload'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Song added successfully
+          schema:
+            type: string
+        "400":
+          description: Invalid input
+          schema:
+            type: string
+        "500":
+          description: Failed to add song
+          schema:
+            type: string
+      summary: Add a new song
+      tags:
+      - songs
+  /songs/delete:
+    delete:
+      consumes:
+      - application/json
+      description: Deletes a song based on its name and group.
+      parameters:
+      - description: delete the song based on ID
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/types.SongDeletePayload'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Song deleted successfully
+          schema:
+            type: string
+        "400":
+          description: Invalid input
+          schema:
+            type: string
+        "500":
+          description: Failed to delete song
+          schema:
+            type: string
+      summary: Delete a song
+      tags:
+      - songs
+  /songs/get:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves songs matching specified criteria through query parameters.
+      parameters:
+      - description: ID of the song
+        in: query
+        name: id
+        type: integer
+      - description: Name of the song
+        in: query
+        name: song
+        type: string
+      - description: Group name
+        in: query
+        name: group
+        type: string
+      - description: Link to the song
+        in: query
+        name: link
+        type: string
+      - description: Time (RFC3339 format)
+        in: query
+        name: time
+        type: string
+      - description: Lyrics as a JSON array
+        in: query
+        name: lyrics
+        type: string
+      - description: Maximum number of results to return
+        in: query
+        name: limit
+        type: integer
+      - description: Offset for pagination
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Songs retrieved successfully
+          schema:
+            items:
+              $ref: '#/definitions/types.Song'
+            type: array
+        "400":
+          description: Invalid query parameter
+          schema:
+            type: string
+        "404":
+          description: No songs found
+          schema:
+            type: string
+        "500":
+          description: Failed to fetch songs
+          schema:
+            type: string
+      summary: Retrieve songs
+      tags:
+      - songs
+  /songs/update:
+    put:
+      consumes:
+      - application/json
+      description: Updates existing song details.
+      parameters:
+      - description: update the song
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/types.Song'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Song updated successfully
+          schema:
+            type: string
+        "400":
+          description: Invalid input
+          schema:
+            type: string
+        "500":
+          description: Failed to update song
+          schema:
+            type: string
+      summary: Update song
+      tags:
+      - songs
+swagger: "2.0"

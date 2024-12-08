@@ -6,6 +6,7 @@ require (
 	github.com/fatih/color v1.18.0
 	github.com/go-resty/resty/v2 v2.16.2
 	github.com/golang-migrate/migrate/v4 v4.18.1
+	github.com/gorilla/handlers v1.5.2
 	github.com/gorilla/mux v1.8.1
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.10.9
@@ -21,7 +22,6 @@ require (
 	github.com/go-openapi/jsonreference v0.19.6 // indirect
 	github.com/go-openapi/spec v0.20.4 // indirect
 	github.com/go-openapi/swag v0.19.15 // indirect
-	github.com/gorilla/handlers v1.5.2 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/josharian/intern v1.0.0 // indirect

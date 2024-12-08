@@ -161,41 +161,18 @@ func (s *Store) GetSongs(filters url.Values) ([]types.Song, error) {
 	return songs, nil
 }
 
-func (s *Store) DeleteSong(name, group, link string, id int) error {
+func (s *Store) DeleteSong(id int) error {
 	const op = "song.DeleteSong"
-	s.log.Info("Deleting song", "operation", op, "name", name, "group", group, "link", link, "id", id)
+	s.log.Info("Deleting song", "operation", op, "id", id)
 
-	var groupId int
-	if group != "" {
-		queryGroup := `SELECT id FROM groups WHERE groupName = $1`
-		err := s.db.QueryRow(queryGroup, group).Scan(&groupId)
-		if err != nil {
-			s.log.Error("Error finding group ID", "operation", op, "group", group, logger.Err(err))
-			return err
-		}
-	}
+	// Build delete query based on song ID
+	query := `DELETE FROM songs WHERE id = $1`
 
-	var query string
-	var args []interface{}
-
-	if id != 0 {
-		query = `DELETE FROM songs WHERE id = $1`
-		args = append(args, id)
-	} else {
-		query = `DELETE FROM songs WHERE songName = $1 AND songGroupId = $2`
-		args = append(args, name)
-
-		if group != "" {
-			args = append(args, groupId)
-		} else {
-			query = `DELETE FROM songs WHERE link = $1`
-			args = append(args, link)
-		}
-	}
-
-	result, err := s.db.Exec(query, args...)
+	// Execute the delete query
+	s.log.Debug("Executing song delete query", "query", query, "args", id)
+	result, err := s.db.Exec(query, id)
 	if err != nil {
-		s.log.Error("Error deleting song", "operation", op, "name", name, "group", group, "link", link, logger.Err(err))
+		s.log.Error("Error deleting song", "operation", op, "id", id, logger.Err(err))
 		return err
 	}
 
@@ -206,29 +183,11 @@ func (s *Store) DeleteSong(name, group, link string, id int) error {
 	}
 
 	if rowsAffected == 0 {
-		s.log.Warn("No song found to delete", "operation", op, "name", name, "group", group, "link", link)
+		s.log.Warn("No song found to delete", "operation", op, "id", id)
 		return errors.New("song not found")
 	}
 
-	queryCount := `SELECT COUNT(*) FROM songs WHERE songGroupId = $1`
-	var count int
-	err = s.db.QueryRow(queryCount, groupId).Scan(&count)
-	if err != nil {
-		s.log.Error("Error counting songs in group", "operation", op, "groupId", groupId, logger.Err(err))
-		return err
-	}
-
-	if count == 0 && groupId != 0 {
-		queryDeleteGroup := `DELETE FROM groups WHERE id = $1`
-		_, err = s.db.Exec(queryDeleteGroup, groupId)
-		if err != nil {
-			s.log.Error("Error deleting group", "operation", op, "groupId", groupId, logger.Err(err))
-			return err
-		}
-		s.log.Info("Group deleted successfully", "operation", op, "groupId", groupId)
-	}
-
-	s.log.Info("Song deleted successfully", "operation", op, "name", name, "group", group, "link", link)
+	s.log.Info("Song deleted successfully", "operation", op, "id", id)
 	return nil
 }
 
