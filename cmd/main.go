@@ -17,15 +17,14 @@ import (
 )
 
 func main() {
-	const op = "main" // Operation context for consistent logging
+	const op = "main"
 
-	// Set up logger
+	// Setting up logger
 	env := config.Envs.Environment
 	logs := logger.SetupLogger(env)
 	logs.Info("Starting muse_lib", slog.String("env", env))
 	logs.Debug("Debug mode is enabled", slog.String("operation", op))
 
-	// Retrieve PostgresSQL configuration from environment variables or config
 	logs.Info("Loading database configuration", slog.String("operation", op))
 	dbUser := config.Envs.DBUser
 	dbPassword := config.Envs.DBPassword
@@ -33,7 +32,7 @@ func main() {
 	dbName := config.Envs.DBName
 	sslMode := "disable"
 
-	// Log database connection details (excluding sensitive data)
+	// Log database connection details
 	logs.Debug("Database config loaded",
 		slog.String("user", dbUser),
 		slog.String("address", dbAddress),
